@@ -10,7 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && docker-php-ext-install -j$(nproc) \
       mbstring \
-      pdo \
       pdo_sqlite \
       pdo_mysql \
       pdo_pgsql \
@@ -28,4 +27,3 @@ RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 USER www-data
 
 EXPOSE 80
-
