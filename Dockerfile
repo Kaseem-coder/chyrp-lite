@@ -1,26 +1,31 @@
 FROM php:8.3-apache
 
-# Copy app files
-COPY --chown=www-data . /var/www/html/
-
-# Install only what is absolutely needed
+# Install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+      libonig-dev \
+      libpq-dev \
+      libsqlite3-dev \
       unzip \
       git \
-      libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && docker-php-ext-install pdo_sqlite
+    && docker-php-ext-install -j$(nproc) \
+      mbstring \
+      pdo \
+      pdo_sqlite \
+      pdo_mysql \
+      pdo_pgsql \
+      zip
 
-# Make directories writable
-RUN mkdir -p /data/ \
-    && chown -R www-data:www-data /data /var/www/html
+# Copy app
+COPY --chown=www-data:www-data . /var/www/html/
+
+# Ensure permissions
+RUN chown -R www-data:www-data /var/www/html /var/www/html/includes /var/www/html/uploads
+
+# Apache tweaks
+RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 USER www-data
 
 EXPOSE 80
 
-VOLUME /data
-VOLUME /var/www/html/uploads
-
-ENTRYPOINT ["docker-php-entrypoint"]
-CMD ["apache2-foreground"]
