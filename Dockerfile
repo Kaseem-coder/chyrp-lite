@@ -1,33 +1,30 @@
 FROM php:8.3-apache
 
-COPY --chown=www-data . /var/www/html/
+# Install required system libraries
+RUN apt-get update && apt-get install -y \
+    libpng-dev libjpeg-dev libwebp-dev libfreetype6-dev libonig-dev libzip-dev unzip git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      inotify-tools \
-      libonig-dev \
-      libpq-dev \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && docker-php-ext-install pdo_pgsql pdo_mysql
+# Install PHP extensions
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install -j$(nproc) gd mbstring pdo pdo_sqlite pdo_mysql pdo_pgsql zip
 
-RUN mkdir -p /data/ \
-    && chown -R www-data /data \
-    # Setup script
-    && mv /var/www/html/entrypoint.sh / \
-    && chmod u+x /entrypoint.sh \
-    # Use production config for PHP
-    && mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
-    # Raise upload_max_size to 100M
-    && sed -i 's/upload_max_filesize = .*/upload_max_filesize = 100M/' "$PHP_INI_DIR/php.ini" \
-    # Raise post_max_size to 100M
-    && sed -i 's/post_max_size = .*/post_max_size = 100M/' "$PHP_INI_DIR/php.ini"
+# Enable Apache rewrite (needed for pretty URLs)
+RUN a2enmod rewrite
 
-USER www-data
+# Copy code into container
+COPY . /var/www/html
 
-EXPOSE 80/tcp
+# Ensure uploads/cache are writable
+RUN mkdir -p /var/www/html/chyrp-data \
+    && chown -R www-data:www-data /var/www/html /var/www/html/uploads /var/www/html/cache /var/www/html/chyrp-data
 
-VOLUME /data
-VOLUME /var/www/html/uploads
+# PHP config tweaks (for uploads)
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && echo "upload_max_filesize=100M" >> "$PHP_INI_DIR/php.ini" \
+    && echo "post_max_size=100M" >> "$PHP_INI_DIR/php.ini"
 
-ENTRYPOINT ["/entrypoint.sh"]
+# Allow .htaccess overrides
+RUN sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
+
+EXPOSE 80
